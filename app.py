@@ -26,7 +26,7 @@ def load_models():
 
 @st.cache_data
 def load_data():
-    df = pd.read_csv('data/player_profiles.csv')
+    df = pd.read_csv('data/player_profiles_full.csv')
     return df
 
 kmeans, pca, scaler, features_list, archetype_names = load_models()
