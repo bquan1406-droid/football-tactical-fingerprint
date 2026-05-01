@@ -10,7 +10,7 @@ from langchain_groq import ChatGroq
 st.set_page_config(page_title="True AI Agent - Football Tactical Analyst", layout="wide")
 
 st.title("True AI Agent")
-st.markdown("Ask anything naturally. The AI decides what to do.")
+st.markdown("Ask anything naturally. The AI combines data and football knowledge.")
 
 @st.cache_resource
 def load_data():
@@ -40,8 +40,73 @@ df, unique_players, archetype_names = load_data()
 llm = load_llm()
 
 # ============================================
+# NICKNAME MAPPING for famous players
+# ============================================
+nickname_to_player = {
+    'messi': 'Lionel Messi',
+    'ronaldo': 'Cristiano Ronaldo',
+    'cr7': 'Cristiano Ronaldo',
+    'mbappe': 'Kylian Mbappe',
+    'neymar': 'Neymar',
+    'salah': 'Mohamed Salah',
+    'kdb': 'Kevin De Bruyne',
+    'vvd': 'Virgil van Dijk',
+    'rodri': 'Rodri',
+    'haaland': 'Erling Haaland',
+    'lewa': 'Robert Lewandowski',
+    'lewy': 'Robert Lewandowski',
+    'kane': 'Harry Kane',
+    'son': 'Son Heung-Min',
+    'sterling': 'Raheem Sterling',
+    'foden': 'Phil Foden',
+    'bernardo': 'Bernardo Silva',
+    'gundo': 'Ilkay Gundogan',
+    'kante': 'N Golo Kante',
+    'hazard': 'Eden Hazard',
+    'pique': 'Gerard Pique',
+    'ramos': 'Sergio Ramos',
+    'modric': 'Luka Modric',
+    'kroos': 'Toni Kroos',
+    'benzema': 'Karim Benzema',
+    'vini': 'Vinicius Junior',
+    'saka': 'Bukayo Saka',
+    'odegaard': 'Martin Odegaard',
+    'rice': 'Declan Rice',
+    'bellingham': 'Jude Bellingham',
+    'pedri': 'Pedri',
+    'gavi': 'Gavi',
+}
+
+# Famous players not in dataset (will use LLM knowledge)
+famous_players_not_in_dataset = [
+    'Lionel Messi', 'Cristiano Ronaldo', 'Neymar', 'Kylian Mbappe',
+    'Zlatan Ibrahimovic', 'Andres Iniesta', 'Xavi', 'Carles Puyol'
+]
+
+# ============================================
 # CORE FUNCTIONS
 # ============================================
+
+def resolve_player_name(input_name):
+    """Convert nickname or partial name to full player name"""
+    input_lower = input_name.lower().strip()
+    
+    # Check nickname map
+    if input_lower in nickname_to_player:
+        return nickname_to_player[input_lower]
+    
+    # Check if name is in dataset
+    player_row = unique_players[unique_players['player'] == input_name]
+    if not player_row.empty:
+        return input_name
+    
+    # Try fuzzy match
+    all_players = unique_players['player'].tolist()
+    matches = get_close_matches(input_name, all_players, n=1, cutoff=0.6)
+    if matches:
+        return matches[0]
+    
+    return None
 
 def get_player_stats_summary(player_name):
     player_row = unique_players[unique_players['player'] == player_name]
@@ -141,64 +206,125 @@ def find_similar(p_name, top_n=5):
     results.sort(key=lambda x: x['similarity'], reverse=True)
     return results[:top_n]
 
-def extract_player_names(question):
-    all_players = unique_players['player'].tolist()
-    found = [p for p in all_players if p.lower() in question.lower()]
-    return found
+def get_llm_biography(player_name):
+    """Get biographical info from LLM for famous players not in dataset"""
+    prompt = f"""Provide a brief biography of football player {player_name}. Include:
+- Full name
+- Date of birth (year only)
+- Position
+- Current or most recent club
+- Key achievements (Ballon d'Or, Champions League, World Cup, league titles)
+- Playing style (3-4 words)
+
+Keep it concise, 4-5 lines maximum.
+"""
+    response = llm.invoke(prompt)
+    return response.content
+
+def get_llm_comparison(p1, p2):
+    """Get comparison from LLM for famous players not in dataset"""
+    prompt = f"""Compare the two football players {p1} and {p2}. Include:
+1. Their playing styles
+2. Key strengths of each
+3. Key achievements
+4. Who is considered better overall and why
+
+Keep it concise, 6-8 lines maximum.
+"""
+    response = llm.invoke(prompt)
+    return response.content
 
 # ============================================
-# CUSTOM AGENT LOOP (LLM decides what to do)
+# MAIN ANSWER FUNCTION
 # ============================================
-
-system_prompt = """You are a football tactical analyst assistant. You have access to these tools:
-
-1. get_player_stats(player_name): Returns detailed stats and archetype for a player.
-2. compare_players(player1, player2): Compares two players side by side.
-3. find_similar_players(player_name): Returns players with similar playing style.
-
-When a user asks a question:
-- If they ask about a single player's style, stats, or archetype, use get_player_stats
-- If they ask to compare two players, use compare_players
-- If they ask for similar players or recommendations, use find_similar_players
-
-Respond with the tool result. Do not make up information.
-
-Available player names: """ + ", ".join(unique_players['player'].sample(50).tolist())
 
 def answer_question(question):
     question_lower = question.lower()
     
-    # Detect if it's a comparison
-    if "compare" in question_lower or "vs" in question_lower or "versus" in question_lower:
-        players = extract_player_names(question)
-        if len(players) >= 2:
-            return compare_players(players[0], players[1])
+    # Extract player names using nickname mapping
+    found_players = []
     
-    # Detect if it's asking for similar players
-    if "similar" in question_lower or "like" in question_lower:
-        players = extract_player_names(question)
-        if players:
-            results = find_similar(players[0], top_n=5)
-            if results:
-                output = f"Players similar to {players[0]}:\n"
-                for i, p in enumerate(results, 1):
-                    output += f"{i}. {p['name']} ({p['archetype']}) - {p['similarity']}% similar\n"
-                return output
+    # Check nicknames first
+    for nickname, full_name in nickname_to_player.items():
+        if nickname in question_lower:
+            found_players.append(full_name)
     
-    # Single player query
-    players = extract_player_names(question)
-    if players:
-        stats = get_player_stats_summary(players[0])
-        if stats:
-            return stats
+    # Check exact player names in dataset
+    all_players = unique_players['player'].tolist()
+    for player in all_players:
+        if player.lower() in question_lower and player not in found_players:
+            found_players.append(player)
     
-    # If no tool matched, use LLM for general football knowledge
+    # Remove duplicates
+    found_players = list(dict.fromkeys(found_players))
+    
+    # Check if players are in dataset vs famous
+    players_in_dataset = [p for p in found_players if p in all_players]
+    players_not_in_dataset = [p for p in found_players if p not in all_players]
+    
+    # ========================================
+    # COMPARISON QUESTIONS
+    # ========================================
+    if ("compare" in question_lower or "vs" in question_lower or "versus" in question_lower or "better" in question_lower) and len(found_players) >= 2:
+        p1, p2 = found_players[0], found_players[1]
+        
+        # Both in dataset
+        if p1 in all_players and p2 in all_players:
+            comparison = compare_players(p1, p2)
+            if comparison:
+                return comparison
+        
+        # One or both not in dataset - use LLM
+        else:
+            return get_llm_comparison(p1, p2)
+    
+    # ========================================
+    # SINGLE PLAYER QUESTIONS
+    # ========================================
+    if found_players:
+        player = found_players[0]
+        
+        # Player is in dataset - use stats + add LLM context
+        if player in all_players:
+            stats = get_player_stats_summary(player)
+            
+            # Add LLM context for playing style
+            context_prompt = f"""Based on these stats for {player}, describe their playing style in 2 sentences:
+
+Stats: {stats}
+
+Playing style:"""
+            style_response = llm.invoke(context_prompt)
+            style = style_response.content
+            
+            return f"{stats}\n\n---\n\n**Playing Style:**\n{style}"
+        
+        # Player not in dataset - use LLM biography
+        else:
+            bio = get_llm_biography(player)
+            return bio
+    
+    # ========================================
+    # SIMILAR PLAYERS
+    # ========================================
+    if ("similar" in question_lower or "like" in question_lower):
+        for player in all_players:
+            if player.lower() in question_lower:
+                results = find_similar(player, top_n=5)
+                if results:
+                    output = f"Players similar to {player}:\n"
+                    for i, p in enumerate(results, 1):
+                        output += f"{i}. {p['name']} ({p['archetype']}) - {p['similarity']}% similar\n"
+                    return output
+    
+    # ========================================
+    # FALLBACK TO LLM
+    # ========================================
     prompt = f"""Answer this football question briefly and helpfully. If you don't know, say so.
 
 Question: {question}
 
 Answer:"""
-    
     response = llm.invoke(prompt)
     return response.content
 
