@@ -1,4 +1,5 @@
 # Football Tactical Fingerprint
+
 ## Live Demos
 
 | App | Description | Link |
@@ -47,22 +48,57 @@ A data-driven system that:
 
 ---
 
+## Exploratory Data Analysis (EDA)
+
+All visualizations were created in **Power BI** to understand player patterns before modeling.
+
+### Plot 1: Midfielders - Passing vs Tackles
+
+![Passing vs Tackles](EDA/EDA%20PLOT%201%20-%20Midfielders%20passing%20vs%20tackles.png)
+
+*Midfielders average 80% pass completion and 1.2 tackles per 90 minutes. Two clusters emerge: creative playmakers (high passing, low tackles) and defensive destroyers (low passing, high tackles).*
+
+### Plot 2: Age vs Progressive Carries (Forwards)
+
+![Age vs Carries](EDA/EDA%20PLOT%202%20-%20Age%20vs%20progressive%20carries%20(FW).png)
+
+*Forwards peak in progressive carries between ages 24-27, with a clear decline after age 30. This informs contract decisions and player valuation.*
+
+### Plot 3: Age Distribution
+
+![Age Distribution](EDA/EDA%20PLOT%203%20-%20Age%20distribution.png)
+
+*The most common player age is 24-27, representing the prime years for outfield players in Europe's top leagues.*
+
+### Plot 4: Shot Efficiency
+
+![Shot Efficiency](EDA/EDA%20PLOT%204%20-%20SHOT%20EFFICIENCY.png)
+
+*Elite forwards have higher goals-per-shot ratios. Volume merchants (many shots, low efficiency) are separated from clinical finishers.*
+
+### Plot 5: Tackles vs Interceptions Per 90
+
+![Tackles vs Interceptions](EDA/EDA%20PLOT%205%20-%20TACKLES%20PER%2090%20VS%20INTERCEPTIONS%20PER%2090.png)
+
+*Defenders (DF) dominate both metrics. Midfielders show moderate values, while forwards contribute minimally to defensive actions.*
+
+### Plot 6: Short Pass vs Long Pass Completion
+
+![Short vs Long Passes](EDA/EDA%20PLOT%206%20-%20SHORT%20PASSES%20%25%20vs%20LONG%20PASSES%20%25.png)
+
+*Defenders excel at long passes (switching play). Midfielders maintain high accuracy in both short and medium ranges.*
+
+### Plot 7: Progressive Carries vs Progressive Passes
+
+![Progressive Carries vs Passes](EDA/EDA%207%20-%20PROGRESSION%20CARRIES%20VS%20PROGRESSION%20PASSES.png)
+
+*Midfielders lead in both categories. Wingers excel at carries, while deep-lying playmakers rely on progressive passes.*
+
+---
+
 ## Methodology
 
-### Step 1: Exploratory Data Analysis (Power BI)
-
-Created 8+ interactive visualizations to understand the data:
-
-| Plot | Insight Discovered |
-|------|-------------------|
-| Players per league | Serie A has 23% of players, Bundesliga 17% |
-| Passing vs Tackles | Midfielders average 80% passing, 1.2 tackles/90 |
-| Age vs Carries | Forwards decline after age 26 |
-| Age distribution | Peak player age is 24-27 |
-| Goals by position | Forwards: 8-12 goals/season, Defenders: 1-2 |
-| Shot efficiency | Elite forwards have higher goals/shot ratio |
-
-### Step 2: Feature Engineering
+### Step 1: Feature Engineering
 
 | Feature Type | Count | Examples |
 |--------------|-------|----------|
@@ -71,7 +107,7 @@ Created 8+ interactive visualizations to understand the data:
 | Season normalization (z-score) | 39 | Removed era bias (2017 vs 2025) |
 | Engineered features | 5 | Goal Efficiency, Creativity Score, Defensive Index |
 
-### Step 3: Dimensionality Reduction (PCA)
+### Step 2: Dimensionality Reduction (PCA)
 
 | Component | Variance | Interpretation |
 |-----------|----------|----------------|
@@ -81,7 +117,7 @@ Created 8+ interactive visualizations to understand the data:
 
 **Total explained variance with 2 components:** 50.9% (acceptable for noisy sports data)
 
-### Step 4: Clustering (K-Means)
+### Step 3: Clustering (K-Means)
 
 Compared 4 algorithms (K-Means, GMM, DBSCAN, t-SNE). Selected K-Means with 7 clusters.
 
@@ -146,5 +182,10 @@ Compared 4 algorithms (K-Means, GMM, DBSCAN, t-SNE). Selected K-Means with 7 clu
 | Machine Learning | Scikit-learn (PCA, K-Means, GMM, DBSCAN) |
 | Visualization | Matplotlib, Seaborn, Plotly, Power BI |
 | Deployment | Streamlit, Joblib, GitHub |
+| LLM Integration | Groq API, LangGraph |
 
+---
 
+## License
+
+This project is for portfolio and educational purposes.
