@@ -5,3 +5,6 @@ scikit-learn
 joblib
 plotly
 matplotlib
+langchain
+langchain-groq
+langgraph
