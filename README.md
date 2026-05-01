@@ -1,5 +1,11 @@
 # Football Tactical Fingerprint
-[![Live Demo](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://football-tactical-fingerprint.streamlit.app/)
+## Live Demos
+
+| App | Description | Link |
+|-----|-------------|------|
+| **Main App** | Player search, PCA visualization, and archetype explorer | [Launch Main App](https://football-tactical-fingerprint.streamlit.app) |
+| **AI Assistant** | Ask questions about player archetypes and stats | [Launch AI Assistant](https://football-tactical-fingerprint.streamlit.app/agent_app) |
+| **True AI Agent** | Natural language football analyst powered by an LLM | [Launch True AI Agent](https://football-tactical-fingerprint-ai.streamlit.app) |
 
 ## Project Overview
 
