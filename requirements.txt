@@ -7,4 +7,3 @@ plotly
 matplotlib
 langchain-groq
 langgraph
-pydantic
