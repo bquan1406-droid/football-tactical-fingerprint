@@ -6,4 +6,3 @@ joblib
 plotly
 matplotlib
 langchain-groq
-langgraph
