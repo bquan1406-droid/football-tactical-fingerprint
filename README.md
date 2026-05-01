@@ -107,7 +107,7 @@ Compared 4 algorithms (K-Means, GMM, DBSCAN, t-SNE). Selected K-Means with 7 clu
 
 ### Archetype Visualization
 
-![PCA Clusters](images/pca_clusters.png)
+![PCA Clusters](EDA/archetype.png)
 
 *PCA projection showing 7 distinct player archetypes. PC1 (X-axis) represents Attacking vs Defending. PC2 (Y-axis) represents Passing vs Carrying.*
 
