@@ -17,7 +17,7 @@ st.markdown("Ask anything about player archetypes, comparisons, and similar play
 # Load data and models
 @st.cache_resource
 def load_data_and_models():
-    df = pd.read_csv('data/player_profiles.csv')
+    df = pd.read_csv('data/player_profiles_full.csv')
     
     with open('models/archetype_names.pkl', 'rb') as f:
         archetype_names = pickle.load(f)
