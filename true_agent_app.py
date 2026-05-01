@@ -3,9 +3,9 @@ import pandas as pd
 import numpy as np
 import os
 import pickle
+import re
 from difflib import get_close_matches
 from langchain_groq import ChatGroq
-from langgraph.prebuilt import create_react_agent
 
 st.set_page_config(page_title="True AI Agent - Football Tactical Analyst", layout="wide")
 
@@ -38,6 +38,10 @@ country_names = {
 
 df, unique_players, archetype_names = load_data()
 llm = load_llm()
+
+# ============================================
+# CORE FUNCTIONS
+# ============================================
 
 def get_player_stats_summary(player_name):
     player_row = unique_players[unique_players['player'] == player_name]
@@ -137,30 +141,71 @@ def find_similar(p_name, top_n=5):
     results.sort(key=lambda x: x['similarity'], reverse=True)
     return results[:top_n]
 
-# Simple tool functions (no decorators needed)
-def get_player_stats_tool(player_name: str) -> str:
-    result = get_player_stats_summary(player_name)
-    return result if result else f"Player '{player_name}' not found."
+def extract_player_names(question):
+    all_players = unique_players['player'].tolist()
+    found = [p for p in all_players if p.lower() in question.lower()]
+    return found
 
-def compare_players_tool(player1: str, player2: str) -> str:
-    result = compare_players(player1, player2)
-    return result if result else f"One or both players not found."
+# ============================================
+# CUSTOM AGENT LOOP (LLM decides what to do)
+# ============================================
 
-def find_similar_players_tool(player_name: str) -> str:
-    results = find_similar(player_name, top_n=5)
-    if not results:
-        return f"No similar players found for '{player_name}'."
-    output = f"Players similar to {player_name}:\n"
-    for i, p in enumerate(results, 1):
-        output += f"{i}. {p['name']} ({p['archetype']}) - {p['similarity']}% similar\n"
-    return output
+system_prompt = """You are a football tactical analyst assistant. You have access to these tools:
 
-tools = [get_player_stats_tool, compare_players_tool, find_similar_players_tool]
+1. get_player_stats(player_name): Returns detailed stats and archetype for a player.
+2. compare_players(player1, player2): Compares two players side by side.
+3. find_similar_players(player_name): Returns players with similar playing style.
 
-# Create the agent
-agent_executor = create_react_agent(model=llm, tools=tools)
+When a user asks a question:
+- If they ask about a single player's style, stats, or archetype, use get_player_stats
+- If they ask to compare two players, use compare_players
+- If they ask for similar players or recommendations, use find_similar_players
 
-# Chat interface
+Respond with the tool result. Do not make up information.
+
+Available player names: """ + ", ".join(unique_players['player'].sample(50).tolist())
+
+def answer_question(question):
+    question_lower = question.lower()
+    
+    # Detect if it's a comparison
+    if "compare" in question_lower or "vs" in question_lower or "versus" in question_lower:
+        players = extract_player_names(question)
+        if len(players) >= 2:
+            return compare_players(players[0], players[1])
+    
+    # Detect if it's asking for similar players
+    if "similar" in question_lower or "like" in question_lower:
+        players = extract_player_names(question)
+        if players:
+            results = find_similar(players[0], top_n=5)
+            if results:
+                output = f"Players similar to {players[0]}:\n"
+                for i, p in enumerate(results, 1):
+                    output += f"{i}. {p['name']} ({p['archetype']}) - {p['similarity']}% similar\n"
+                return output
+    
+    # Single player query
+    players = extract_player_names(question)
+    if players:
+        stats = get_player_stats_summary(players[0])
+        if stats:
+            return stats
+    
+    # If no tool matched, use LLM for general football knowledge
+    prompt = f"""Answer this football question briefly and helpfully. If you don't know, say so.
+
+Question: {question}
+
+Answer:"""
+    
+    response = llm.invoke(prompt)
+    return response.content
+
+# ============================================
+# CHAT INTERFACE
+# ============================================
+
 st.subheader("Chat with the True AI Agent")
 
 if "messages" not in st.session_state:
@@ -178,8 +223,7 @@ if prompt := st.chat_input("Ask anything about football players..."):
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             try:
-                response = agent_executor.invoke({"messages": [("user", prompt)]})
-                answer = response["messages"][-1].content
+                answer = answer_question(prompt)
                 st.markdown(answer)
             except Exception as e:
                 st.error(f"Error: {e}")
