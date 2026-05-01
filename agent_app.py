@@ -45,42 +45,61 @@ country_names = {
 df, unique_players, archetype_names = load_data()
 llm = load_llm()
 
-# Nickname mapping
+# Nickname mapping - put common names and misspellings here
 nickname_map = {
     'messi': 'Lionel Messi',
+    'lionel messi': 'Lionel Messi',
     'ronaldo': 'Cristiano Ronaldo',
+    'cristiano ronaldo': 'Cristiano Ronaldo',
     'cr7': 'Cristiano Ronaldo',
     'mbappe': 'Kylian Mbappe',
     'neymar': 'Neymar',
     'salah': 'Mohamed Salah',
     'kdb': 'Kevin De Bruyne',
+    'kevin de bruyne': 'Kevin De Bruyne',
     'vvd': 'Virgil van Dijk',
+    'virgil van dijk': 'Virgil van Dijk',
     'rodri': 'Rodri',
     'haaland': 'Erling Haaland',
     'lewa': 'Robert Lewandowski',
-    'ribery': 'Franck Ribery',
-    'robben': 'Arjen Robben',
-    'iniesta': 'Andres Iniesta',
-    'xavi': 'Xavi',
+    'lewy': 'Robert Lewandowski',
+    'kane': 'Harry Kane',
+    'harry kane': 'Harry Kane',
+    'son': 'Son Heung-Min',
+    'fernandes': 'Bruno Fernandes',
+    'bruno': 'Bruno Fernandes',
+    'rashford': 'Marcus Rashford',
+    'marcus rashford': 'Marcus Rashford',
+    'sterling': 'Raheem Sterling',
+    'foden': 'Phil Foden',
+    'bernardo': 'Bernardo Silva',
+    'silva': 'David Silva',
+    'gundogan': 'Ilkay Gundogan',
+    'kante': 'N Golo Kante',
+    'hazard': 'Eden Hazard',
+    'zlatan': 'Zlatan Ibrahimovic',
+    'ibrahimovic': 'Zlatan Ibrahimovic',
+    'aguero': 'Sergio Aguero',
+    'kun aguero': 'Sergio Aguero',
     'pique': 'Gerard Pique',
     'ramos': 'Sergio Ramos',
     'modric': 'Luka Modric',
     'kroos': 'Toni Kroos',
     'benzema': 'Karim Benzema',
-    'aguero': 'Sergio Aguero',
-    'zlatan': 'Zlatan Ibrahimovic',
-    'ibrahimovic': 'Zlatan Ibrahimovic',
-    'kante': 'N Golo Kante',
-    'hazard': 'Eden Hazard',
-    'sterling': 'Raheem Sterling',
-    'foden': 'Phil Foden',
-    'harry kane': 'Harry Kane',
-    'kane': 'Harry Kane',
-    'son': 'Son Heung-Min',
-    'fernandes': 'Bruno Fernandes',
-    'bruno': 'Bruno Fernandes',
-    'rashford': 'Marcus Rashford',
-    'marcus': 'Marcus Rashford',
+    'vini': 'Vinicius Junior',
+    'vinicius': 'Vinicius Junior',
+    'vinicius jr': 'Vinicius Junior',
+    'saka': 'Bukayo Saka',
+    'odegaard': 'Martin Odegaard',
+    'odegaard': 'Martin Odegaard',
+    'rice': 'Declan Rice',
+    'declan rice': 'Declan Rice',
+    'bellingham': 'Jude Bellingham',
+    'jude': 'Jude Bellingham',
+    'pedri': 'Pedri',
+    'gavi': 'Gavi',
+    'musiala': 'Jamal Musiala',
+    'wirtz': 'Florian Wirtz',
 }
 
 def get_player_archetype(player_name):
@@ -201,7 +220,8 @@ def get_players_by_archetype(archetype_name, limit=10):
             break
     
     if arch_id is None:
-        return f"Archetype '{archetype_name}' not found. Available: {', '.join(archetype_names.values())}"
+        available = list(archetype_names.values())
+        return f"Archetype '{archetype_name}' not found. Available: {', '.join(available)}"
     
     players = unique_players[unique_players['archetype'] == arch_id].head(limit)
     result = f"Players in {archetype_name} archetype:\n"
@@ -227,7 +247,6 @@ Write a short, insightful analysis (3-4 sentences) covering:
 
 Use professional football terminology. Be specific and data-driven.
 """
-    
     response = llm.invoke(prompt)
     return response.content
 
@@ -245,7 +264,6 @@ Write a short, insightful analysis (4-5 sentences) covering:
 
 Use professional football terminology. Be specific and data-driven.
 """
-    
     response = llm.invoke(prompt)
     return response.content
 
@@ -260,7 +278,6 @@ Write a short analysis (2-3 sentences) explaining:
 1. What pattern or playing style connects these players
 2. What this suggests about the target player's tactical profile
 """
-    
     response = llm.invoke(prompt)
     return response.content
 
@@ -276,49 +293,61 @@ def get_player_biography(player_name):
 
 Keep it very concise, 4-5 lines maximum. Do not include stats from the dataset.
 """
-    
     response = llm.invoke(prompt)
     return response.content
 
 # Direct question answering function
 def answer_question(question):
+    original_question = question
     question_lower = question.lower().strip()
     
-    # Check nickname map first
-    if question_lower in nickname_map:
-        found_players = [nickname_map[question_lower]]
-        resolved_name = found_players[0]
-    else:
-        all_players = unique_players['player'].tolist()
-        found_players = [p for p in all_players if p.lower() in question_lower]
-        resolved_name = found_players[0] if found_players else None
+    # STEP 1: Check nickname mapping FIRST
+    resolved_name = None
+    for nickname, full_name in nickname_map.items():
+        if nickname == question_lower or nickname in question_lower.split():
+            resolved_name = full_name
+            break
     
-    # Biography questions (who is, tell me about)
-    if ("who is" in question_lower or "tell me about" in question_lower) and resolved_name:
-        bio = get_player_biography(resolved_name)
-        stats = get_player_stats_summary(resolved_name)
+    # If nickname found, replace it
+    if resolved_name:
+        question = question.replace(question_lower, resolved_name)
+        question_lower = question.lower()
+    
+    # STEP 2: Find players in dataset
+    all_players = unique_players['player'].tolist()
+    found_players = [p for p in all_players if p.lower() in question_lower or question_lower in p.lower()]
+    
+    # If still no match, try fuzzy search on the original term
+    if not found_players and resolved_name:
+        found_players = [resolved_name] if resolved_name in all_players else []
+    
+    # STEP 3: Handle different question types
+    # Biography questions
+    if ("who is" in question_lower or "tell me about" in question_lower) and found_players:
+        bio = get_player_biography(found_players[0])
+        stats = get_player_stats_summary(found_players[0])
         if stats:
-            analysis = analyze_player_profile(resolved_name, stats)
+            analysis = analyze_player_profile(found_players[0], stats)
             return f"{bio}\n\n---\n\n**Stats Summary:**\n{stats}\n\n---\n\n**Tactical Analysis:**\n{analysis}"
         return bio
     
-    # Archetype question with analysis
-    if ("archetype" in question_lower or "what is" in question_lower) and resolved_name:
-        stats = get_player_stats_summary(resolved_name)
+    # Archetype question
+    if ("archetype" in question_lower or "what is" in question_lower) and found_players:
+        stats = get_player_stats_summary(found_players[0])
         if stats:
-            analysis = analyze_player_profile(resolved_name, stats)
+            analysis = analyze_player_profile(found_players[0], stats)
             return f"{stats}\n\n---\n\n**Tactical Analysis:**\n{analysis}"
-        return f"Player '{resolved_name}' not found in database."
+        return f"Player '{found_players[0]}' not found in database."
     
-    # Stats summary with analysis
-    if ("stats" in question_lower or "summary" in question_lower or "profile" in question_lower) and resolved_name:
-        stats = get_player_stats_summary(resolved_name)
+    # Stats summary
+    if ("stats" in question_lower or "summary" in question_lower or "profile" in question_lower) and found_players:
+        stats = get_player_stats_summary(found_players[0])
         if stats:
-            analysis = analyze_player_profile(resolved_name, stats)
+            analysis = analyze_player_profile(found_players[0], stats)
             return f"{stats}\n\n---\n\n**Tactical Analysis:**\n{analysis}"
-        return f"Player '{resolved_name}' not found in database."
+        return f"Player '{found_players[0]}' not found in database."
     
-    # Comparison with analysis
+    # Comparison
     if "compare" in question_lower and len(found_players) >= 2:
         comparison = compare_players(found_players[0], found_players[1])
         if comparison:
@@ -326,16 +355,16 @@ def answer_question(question):
             return f"{comparison}\n\n---\n\n**Tactical Analysis:**\n{analysis}"
         return comparison
     
-    # Similar players with analysis
-    if ("similar" in question_lower or "like" in question_lower) and resolved_name:
-        results = find_similar_scouting(resolved_name, top_n=5)
+    # Similar players
+    if ("similar" in question_lower or "like" in question_lower) and found_players:
+        results = find_similar_scouting(found_players[0], top_n=5)
         if results:
-            output = f"Players similar to {resolved_name}:\n"
+            output = f"Players similar to {found_players[0]}:\n"
             for i, p in enumerate(results, 1):
                 output += f"{i}. {p['name']} ({p['archetype']}) - {p['similarity']}% similar\n"
-            analysis = analyze_similar_players(resolved_name, output)
+            analysis = analyze_similar_players(found_players[0], output)
             return f"{output}\n\n---\n\n**Analysis:**\n{analysis}"
-        return f"No similar players found for {resolved_name}."
+        return f"No similar players found for {found_players[0]}."
     
     # List players by archetype
     for arch_name in archetype_names.values():
@@ -343,20 +372,26 @@ def answer_question(question):
             return get_players_by_archetype(arch_name, limit=10)
     
     # Fuzzy search for player not found
-    if not resolved_name:
-        search_term = question_lower.replace("who is ", "").replace("what is ", "").replace("compare ", "").strip()
+    if not found_players:
+        search_term = original_question.replace("who is ", "").replace("what is ", "").replace("compare ", "").strip()
         matches = find_player_fuzzy(search_term)
         if matches:
             return f"Player '{search_term}' not found. Did you mean: {', '.join(matches[:3])}?\n\nYou can also ask:\n- 'What archetype is [player name]?'\n- 'Compare [player1] and [player2]'\n- 'Find players similar to [player name]'"
+        
+        # Check if it's a famous player not in database
+        famous_players = ['messi', 'ronaldo', 'neymar', 'mbappe', 'haaland', 'lewy', 'zlatan']
+        if search_term.lower() in famous_players:
+            return f"{search_term.title()} is a famous player but may not be in this dataset (covers 2017-2025 top 5 leagues). Try asking about players from that period like 'Mohamed Salah' or 'Kevin De Bruyne'."
+        
         return f"I couldn't find any player matching '{search_term}'.\n\nTry asking about specific players like:\n- 'What archetype is Mohamed Salah?'\n- 'Compare Messi and Ronaldo'\n- 'Find players similar to Rodri'"
     
     # Default response for single player
-    if resolved_name:
-        stats = get_player_stats_summary(resolved_name)
+    if found_players:
+        stats = get_player_stats_summary(found_players[0])
         if stats:
-            analysis = analyze_player_profile(resolved_name, stats)
+            analysis = analyze_player_profile(found_players[0], stats)
             return f"{stats}\n\n---\n\n**Tactical Analysis:**\n{analysis}"
-        return f"Player '{resolved_name}' found but no stats available."
+        return f"Player '{found_players[0]}' found but no stats available."
     
     return "I can help with player archetypes, stats, comparisons, and similar players.\n\nExample questions:\n- 'What archetype is Mohamed Salah?'\n- 'Compare Messi and Ronaldo'\n- 'Find players similar to Rodri'\n- 'List Complete Forwards'"
 
