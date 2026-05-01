@@ -7,4 +7,4 @@ plotly
 matplotlib
 langchain
 langchain-groq
-langgraph
+langgraph==0.2.0
