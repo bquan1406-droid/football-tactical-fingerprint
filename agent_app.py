@@ -4,6 +4,7 @@ import numpy as np
 import os
 import pickle
 from difflib import get_close_matches
+from langchain_groq import ChatGroq
 
 st.set_page_config(page_title="Football Tactical AI Agent", layout="wide")
 
@@ -22,6 +23,12 @@ def load_data():
     
     return df, unique_players, archetype_names
 
+# Initialize LLM for analysis
+@st.cache_resource
+def load_llm():
+    os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
+    return ChatGroq(model="llama-3.3-70b-versatile", temperature=0.5)
+
 # Country mapping
 country_names = {
     'ENG': 'England', 'EGY': 'Egypt', 'FRA': 'France', 'ESP': 'Spain',
@@ -36,6 +43,7 @@ country_names = {
 
 # Load data
 df, unique_players, archetype_names = load_data()
+llm = load_llm()
 
 def get_player_archetype(player_name):
     player_row = unique_players[unique_players['player'] == player_name]
@@ -136,7 +144,14 @@ def compare_players(player1_name, player2_name):
     for stat, label in zip(stats, labels):
         val1 = player1[stat].iloc[0] if stat in player1.columns else 0
         val2 = player2[stat].iloc[0] if stat in player2.columns else 0
-        result += f"{label}: {round(val1, 2)} vs {round(val2, 2)}\n"
+        diff = val1 - val2
+        result += f"{label}: {round(val1, 2)} vs {round(val2, 2)}"
+        if diff > 0:
+            result += f" ({player1_name} leads by {round(diff, 2)})\n"
+        elif diff < 0:
+            result += f" ({player2_name} leads by {round(-diff, 2)})\n"
+        else:
+            result += " (Equal)\n"
     
     return result
 
@@ -161,41 +176,104 @@ def find_player_fuzzy(search_term):
     matches = get_close_matches(search_term, all_players, n=5, cutoff=0.4)
     return matches
 
+def analyze_player_profile(player_name, stats_text):
+    prompt = f"""You are a football tactical analyst at a top European club. Analyze this player profile.
+
+Player data:
+{stats_text}
+
+Write a short, insightful analysis (3-4 sentences) covering:
+1. The player's playing style and tactical role
+2. Their key strengths and weaknesses
+3. What type of team system would maximize their impact
+
+Use professional football terminology. Be specific and data-driven.
+"""
+    
+    response = llm.invoke(prompt)
+    return response.content
+
+def analyze_comparison(player1_name, player2_name, comparison_text):
+    prompt = f"""You are a football tactical analyst at a top European club. Analyze this player comparison.
+
+Comparison data:
+{comparison_text}
+
+Write a short, insightful analysis (4-5 sentences) covering:
+1. The key tactical difference between these players
+2. What each player does better than the other
+3. What kind of team system would suit each player
+4. If you were a sporting director, which would you sign and why
+
+Use professional football terminology. Be specific and data-driven.
+"""
+    
+    response = llm.invoke(prompt)
+    return response.content
+
+def analyze_similar_players(player_name, similar_text):
+    prompt = f"""You are a football tactical analyst. Analyze these similar players.
+
+Target player: {player_name}
+Similar players found:
+{similar_text}
+
+Write a short analysis (2-3 sentences) explaining:
+1. What pattern or playing style connects these players
+2. What this suggests about the target player's tactical profile
+"""
+    
+    response = llm.invoke(prompt)
+    return response.content
+
 # Direct question answering function
 def answer_question(question):
     question_lower = question.lower()
     
-    # Extract player names
     all_players = unique_players['player'].tolist()
     found_players = [p for p in all_players if p.lower() in question_lower]
     
-    # Archetype question
+    # Archetype question with analysis
     if "archetype" in question_lower and found_players:
-        return get_player_stats_summary(found_players[0])
+        stats = get_player_stats_summary(found_players[0])
+        if stats:
+            analysis = analyze_player_profile(found_players[0], stats)
+            return f"{stats}\n\n---\n\n**Tactical Analysis:**\n{analysis}"
+        return stats
     
-    # Stats summary
+    # Stats summary with analysis
     if ("stats" in question_lower or "summary" in question_lower) and found_players:
-        return get_player_stats_summary(found_players[0])
+        stats = get_player_stats_summary(found_players[0])
+        if stats:
+            analysis = analyze_player_profile(found_players[0], stats)
+            return f"{stats}\n\n---\n\n**Tactical Analysis:**\n{analysis}"
+        return stats
     
-    # Comparison
+    # Comparison with analysis
     if "compare" in question_lower and len(found_players) >= 2:
-        return compare_players(found_players[0], found_players[1])
+        comparison = compare_players(found_players[0], found_players[1])
+        if comparison:
+            analysis = analyze_comparison(found_players[0], found_players[1], comparison)
+            return f"{comparison}\n\n---\n\n**Tactical Analysis:**\n{analysis}"
+        return comparison
     
-    # Similar players
+    # Similar players with analysis
     if ("similar" in question_lower or "like" in question_lower) and found_players:
         results = find_similar_scouting(found_players[0], top_n=5)
         if results:
             output = f"Players similar to {found_players[0]}:\n"
             for i, p in enumerate(results, 1):
                 output += f"{i}. {p['name']} ({p['archetype']}) - {p['similarity']}% similar\n"
-            return output
+            analysis = analyze_similar_players(found_players[0], output)
+            return f"{output}\n\n---\n\n**Analysis:**\n{analysis}"
+        return "No similar players found."
     
     # List players by archetype
     for arch_name in archetype_names.values():
         if arch_name.lower() in question_lower:
             return get_players_by_archetype(arch_name, limit=10)
     
-    # Fuzzy search for player not found
+    # Fuzzy search
     if not found_players:
         search_term = question_lower.replace("who is ", "").replace("what is ", "").strip()
         matches = find_player_fuzzy(search_term)
@@ -204,7 +282,11 @@ def answer_question(question):
     
     # Default response
     if found_players:
-        return get_player_stats_summary(found_players[0])
+        stats = get_player_stats_summary(found_players[0])
+        if stats:
+            analysis = analyze_player_profile(found_players[0], stats)
+            return f"{stats}\n\n---\n\n**Tactical Analysis:**\n{analysis}"
+        return stats
     
     return "I can help with player archetypes, stats, comparisons, and similar players. Try asking: 'What archetype is Mohamed Salah?'"
 
@@ -224,7 +306,7 @@ if prompt := st.chat_input("Ask about a player..."):
         st.markdown(prompt)
     
     with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
+        with st.spinner("Analyzing..."):
             answer = answer_question(prompt)
             st.markdown(answer)
     st.session_state.messages.append({"role": "assistant", "content": answer})
