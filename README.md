@@ -185,7 +185,18 @@ Compared 4 algorithms (K-Means, GMM, DBSCAN, t-SNE). Selected K-Means with 7 clu
 | LLM Integration | Groq API, LangGraph |
 
 ---
+## Future Ideas
 
+| Idea | Status |
+|------|--------|
+| Team Fingerprint | 🔜 Planned |
+| Transfer Recommendation Engine | 🔜 Planned |
+| AI Agent Memory | ⚙️ In Progress |
+| Real-time Data Integration | 🔜 Planned |
+| Player Similarity Network | 🔜 Planned |
+| Formation Recommender | 🔜 Planned |
+| PDF Scouting Reports | 🔜 Planned |
+---
 ## License
 
 This project is for portfolio and educational purposes.
