@@ -3,10 +3,6 @@ import pandas as pd
 import numpy as np
 import os
 import pickle
-import joblib
-from langchain_groq import ChatGroq
-from langgraph.prebuilt import create_react_agent
-from langchain_core.tools import tool
 from difflib import get_close_matches
 
 st.set_page_config(page_title="Football Tactical AI Agent", layout="wide")
@@ -16,7 +12,7 @@ st.markdown("Ask anything about player archetypes, comparisons, and similar play
 
 # Load data and models
 @st.cache_resource
-def load_data_and_models():
+def load_data():
     df = pd.read_csv('data/player_profiles_full.csv')
     
     with open('models/archetype_names.pkl', 'rb') as f:
@@ -39,12 +35,12 @@ country_names = {
 }
 
 # Load data
-df, unique_players, archetype_names = load_data_and_models()
+df, unique_players, archetype_names = load_data()
 
 def get_player_archetype(player_name):
     player_row = unique_players[unique_players['player'] == player_name]
     if player_row.empty:
-        return f"Player '{player_name}' not found."
+        return None
     archetype_id = int(player_row['archetype'].iloc[0])
     return archetype_names[archetype_id]
 
@@ -58,7 +54,7 @@ def get_player_nationality(player_name):
 def get_player_stats_summary(player_name):
     player_row = unique_players[unique_players['player'] == player_name]
     if player_row.empty:
-        return f"Player '{player_name}' not found."
+        return None
     
     archetype = get_player_archetype(player_name)
     nationality = get_player_nationality(player_name)
@@ -87,7 +83,7 @@ Key Stats:
 def find_similar_scouting(player_name, top_n=5):
     player_row = unique_players[unique_players['player'] == player_name]
     if player_row.empty:
-        return f"Player '{player_name}' not found."
+        return None
     
     pc1_target = player_row['PC1'].iloc[0]
     pc2_target = player_row['PC2'].iloc[0]
@@ -124,10 +120,8 @@ def compare_players(player1_name, player2_name):
     player1 = unique_players[unique_players['player'] == player1_name]
     player2 = unique_players[unique_players['player'] == player2_name]
     
-    if player1.empty:
-        return f"Player '{player1_name}' not found."
-    if player2.empty:
-        return f"Player '{player2_name}' not found."
+    if player1.empty or player2.empty:
+        return None
     
     arch1 = archetype_names[int(player1['archetype'].iloc[0])]
     arch2 = archetype_names[int(player2['archetype'].iloc[0])]
@@ -146,47 +140,73 @@ def compare_players(player1_name, player2_name):
     
     return result
 
-# Setup Groq API
-os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
+def get_players_by_archetype(archetype_name, limit=10):
+    arch_id = None
+    for aid, aname in archetype_names.items():
+        if aname.lower() == archetype_name.lower():
+            arch_id = aid
+            break
+    
+    if arch_id is None:
+        return f"Archetype '{archetype_name}' not found."
+    
+    players = unique_players[unique_players['archetype'] == arch_id].head(limit)
+    result = f"Players in {archetype_name} archetype:\n"
+    for _, row in players.iterrows():
+        result += f"- {row['player']} ({row.get('team', 'Unknown')})\n"
+    return result
 
-llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.3)
+def find_player_fuzzy(search_term):
+    all_players = unique_players['player'].tolist()
+    matches = get_close_matches(search_term, all_players, n=5, cutoff=0.4)
+    return matches
 
-# Define tools for agent
-@tool
-def get_player_archetype_tool(player_name: str) -> str:
-    """Get the tactical archetype of a player (e.g., Complete Forward, Central Midfielder)."""
-    return get_player_archetype(player_name)
-
-@tool
-def get_player_stats_summary_tool(player_name: str) -> str:
-    """Get a summary of a player's key stats including goals, tackles, passing, and creativity."""
-    return get_player_stats_summary(player_name)
-
-@tool
-def compare_players_tool(player1: str, player2: str) -> str:
-    """Compare two players side by side including archetypes and key stats."""
-    return compare_players(player1, player2)
-
-@tool
-def find_similar_players_tool(player_name: str, top_n: int = 5) -> str:
-    """Find players who have a similar playing style to a given player."""
-    results = find_similar_scouting(player_name, top_n)
-    if isinstance(results, list):
-        output = f"Players similar to {player_name}:\n"
-        for i, p in enumerate(results, 1):
-            output += f"{i}. {p['name']} ({p['archetype']}) - {p['similarity']}% similar\n"
-        return output
-    return str(results)
-
-tools = [
-    get_player_archetype_tool,
-    get_player_stats_summary_tool,
-    compare_players_tool,
-    find_similar_players_tool,
-]
-
-# Create agent
-agent = create_react_agent(model=llm, tools=tools)
+# Direct question answering function
+def answer_question(question):
+    question_lower = question.lower()
+    
+    # Extract player names
+    all_players = unique_players['player'].tolist()
+    found_players = [p for p in all_players if p.lower() in question_lower]
+    
+    # Archetype question
+    if "archetype" in question_lower and found_players:
+        return get_player_stats_summary(found_players[0])
+    
+    # Stats summary
+    if ("stats" in question_lower or "summary" in question_lower) and found_players:
+        return get_player_stats_summary(found_players[0])
+    
+    # Comparison
+    if "compare" in question_lower and len(found_players) >= 2:
+        return compare_players(found_players[0], found_players[1])
+    
+    # Similar players
+    if ("similar" in question_lower or "like" in question_lower) and found_players:
+        results = find_similar_scouting(found_players[0], top_n=5)
+        if results:
+            output = f"Players similar to {found_players[0]}:\n"
+            for i, p in enumerate(results, 1):
+                output += f"{i}. {p['name']} ({p['archetype']}) - {p['similarity']}% similar\n"
+            return output
+    
+    # List players by archetype
+    for arch_name in archetype_names.values():
+        if arch_name.lower() in question_lower:
+            return get_players_by_archetype(arch_name, limit=10)
+    
+    # Fuzzy search for player not found
+    if not found_players:
+        search_term = question_lower.replace("who is ", "").replace("what is ", "").strip()
+        matches = find_player_fuzzy(search_term)
+        if matches:
+            return f"Player '{search_term}' not found. Did you mean: {', '.join(matches[:3])}?"
+    
+    # Default response
+    if found_players:
+        return get_player_stats_summary(found_players[0])
+    
+    return "I can help with player archetypes, stats, comparisons, and similar players. Try asking: 'What archetype is Mohamed Salah?'"
 
 # Chat interface
 st.subheader("Chat with the Agent")
@@ -205,7 +225,6 @@ if prompt := st.chat_input("Ask about a player..."):
     
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            response = agent.invoke({"messages": [("user", prompt)]})
-            answer = response["messages"][-1].content
+            answer = answer_question(prompt)
             st.markdown(answer)
     st.session_state.messages.append({"role": "assistant", "content": answer})
