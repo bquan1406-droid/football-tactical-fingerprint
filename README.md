@@ -40,7 +40,7 @@ A data-driven system that:
 
 | Detail | Information |
 |--------|-------------|
-| Source | FBref via Kaggle |
+| Source | [FBref via Kaggle](https://www.kaggle.com/datasets/emrey3lmaz/top-5-league-football-player-stats-2017-2025) |
 | Leagues | Premier League, La Liga, Serie A, Bundesliga, Ligue 1 |
 | Time Period | 8 seasons (2017-18 to 2024-25) |
 | Raw Data | 22,929 rows, 178 columns |
